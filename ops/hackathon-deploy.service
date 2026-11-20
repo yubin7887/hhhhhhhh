@@ -1,0 +1,10 @@
+[Unit]
+Description=Deploy the tested Hackathon JAR from GitHub Actions
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+EnvironmentFile=-/etc/hackathon-deploy.env
+ExecStart=/usr/local/libexec/hackathon-deploy

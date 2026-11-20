@@ -1,0 +1,56 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+          MYSQL_DATABASE: hackathon_ci
+          MYSQL_USER: ci
+          MYSQL_PASSWORD: ci-only
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysql --protocol=TCP -uci -pci-only hackathon_ci -e 'SELECT 1'"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Run tests and build executable JAR
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:${{ job.services.mysql.ports[3306] }}/hackathon_ci
+          SPRING_DATASOURCE_USERNAME: ci
+          SPRING_DATASOURCE_PASSWORD: ci-only
+        run: bash ./gradlew --no-daemon test bootJar
+      - name: Stage executable JAR
+        if: github.event_name == 'push'
+        run: |
+          mkdir -p deploy
+          cp build/libs/*-SNAPSHOT.jar deploy/app.jar
+      - uses: actions/upload-artifact@v6
+        if: github.event_name == 'push'
+        with:
+          name: hackathon-app
+          path: deploy/app.jar
+          if-no-files-found: error
+          retention-days: 7
